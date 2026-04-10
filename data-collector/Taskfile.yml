@@ -1,0 +1,29 @@
+# https://taskfile.dev
+version: '3'
+
+dotenv: [ '.env' ]
+
+tasks:
+  dev:
+    cmds:
+      - uv run fastapi dev src/app.py --port 8000 --host 0.0.0.0
+  rmrf:
+    requires:
+      vars:
+        - PATH
+    cmds:
+      - powershell -c "if (Test-Path -Path '{{ .PATH }}') { Remove-Item -Recurse -Force -Path '{{ .PATH }}' }"
+
+  lint:
+    cmds:
+      - uvx --managed-python ruff check {{.CLI_ARGS | default "."}}
+      - uvx --managed-python ruff format --check {{.CLI_ARGS | default "."}}
+  
+  lint-fix:
+    cmds:
+      - uvx --managed-python ruff check --fix {{.CLI_ARGS | default "."}}
+      - uvx --managed-python ruff format
+
+  test:
+    cmds:
+      - uv run python -m pytest {{.CLI_ARGS}}
