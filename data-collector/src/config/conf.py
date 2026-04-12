@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     PUSH_INTERVAL_MS: int = 1000
     ENABLE_RAW_METRICS: bool = True
 
-    LHM_DLL_PATH: str = "third_party/LibreHardwareMonitor/LibreHardwareMonitorLib.dll"
+    LHM_BASE_URL: str = "http://127.0.0.1:8085"
+    LHM_DATA_PATH: str = "/data.json"
+    LHM_TIMEOUT_MS: int = 3000
 
     CORS_ORIGINS: list[str] = Field(
         default_factory=lambda: [

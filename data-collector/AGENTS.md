@@ -5,7 +5,7 @@
 - 它负责从 Windows 主机采集硬件指标、完成标准化处理，并通过 `HTTP / WebSocket` 向设备侧提供数据
 
 职责范围
-- 通过 `pythonnet` 加载并调用 `LibreHardwareMonitorLib.dll`
+- 通过 `HTTP` 请求 LibreHardwareMonitor 暴露的远程 Web 接口
 - 周期性刷新硬件树与传感器数据
 - 将原始传感器映射为稳定的统一字段
 - 缓存当前快照与必要的历史数据
@@ -18,9 +18,8 @@
 - 不耦合 ESP32 显示实现细节
 
 推荐技术栈
-- `Python 3.11+`
-- `pythonnet`
-- `LibreHardwareMonitorLib.dll`
+- `Python 3.14+`
+- `LibreHardwareMonitor` 远程 Web 服务
 - `FastAPI`
 - `uvicorn`
 - `Pydantic`
