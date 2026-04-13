@@ -4,12 +4,12 @@
 
 先在 `data-collector` 中打通一条最小可运行链路，验证下面这件事已经成立：
 
-`LibreHardwareMonitorLib.dll -> pythonnet -> Python -> FastAPI -> JSON`
+`LibreHardwareMonitor HTTP data.json -> Python -> FastAPI -> JSON`
 
 当前阶段不追求完整架构，不引入 WebSocket、数据库、复杂状态管理和完整指标标准化，只先确认：
 
-- Python 能成功加载 `LibreHardwareMonitorLib.dll`
-- 能从 PC 读取到原始硬件传感器
+- Python 能成功请求 `LibreHardwareMonitor` 的 `data.json`
+- 能从 PC 读取到原始硬件传感器树
 - 能通过 HTTP 接口把数据返回出来
 
 这一步的核心目的是验证运行环境、依赖和采集路径，而不是一次性做完整产品。
@@ -19,10 +19,11 @@
 第一阶段只做下面几个能力：
 
 - 启动 `FastAPI` 服务
-- 加载 `LibreHardwareMonitorLib.dll`
-- 刷新硬件树并读取原始传感器
+- 请求 `LibreHardwareMonitor` 的 `data.json`
+- 扁平化原始传感器树
 - 暴露 `GET /health`
 - 暴露 `GET /api/metrics/latest`
+- 做最小字段标准化
 
 当前阶段先不做：
 
@@ -38,15 +39,14 @@
 最小链路如下：
 
 1. Python 启动时初始化 `LHMReader`
-2. `LHMReader` 通过 `pythonnet` 加载 `LibreHardwareMonitorLib.dll`
-3. 创建 `Computer()` 并启用 CPU / GPU / Memory / Motherboard / Storage
-4. 每次访问接口时刷新一次硬件树
-5. 收集原始传感器列表
-6. 通过 `FastAPI` 返回 JSON
+2. `LHMReader` 通过 HTTP 请求 `LibreHardwareMonitor` 的 `data.json`
+3. 递归展开传感器树
+4. 提取最小标准化字段
+5. 通过 `FastAPI` 返回 JSON
 
 一句话理解：
 
-先把“读到数据”这件事做出来，再把“字段清洗和协议稳定化”放到下一阶段。
+先把“读到数据”和“提炼最关键字段”做出来，再逐步扩展协议稳定化。
 
 ## 4. 当前仓库中的最小落地结构
 
@@ -60,50 +60,47 @@ data-collector/
     config/
       conf.py
     core/
-      LibreHardwareMonitorLib.dll
       lhm_reader.py
 ```
 
 说明：
 
 - `src/config/conf.py`
-  - 放基础配置，例如端口、采集周期、DLL 路径
+  - 放基础配置，例如端口、采集周期、LHM HTTP 地址
 - `src/core/lhm_reader.py`
-  - 放与 `LibreHardwareMonitor` 的最小集成逻辑
+  - 放与 `LibreHardwareMonitor` 的最小集成逻辑和字段标准化
 - `src/main.py`
   - 放 `FastAPI` 应用和最小 HTTP 接口
-- `src/core/LibreHardwareMonitorLib.dll`
-  - 放 `LibreHardwareMonitor` 的 DLL 文件
 
 ## 5. 依赖建议
 
 最小依赖建议如下：
 
 - `fastapi`
+- `httpx`
 - `uvicorn`
-- `pythonnet`
 - `pydantic`
 - `pydantic-settings`
 
 其中：
 
-- `pythonnet` 用于加载 .NET DLL
+- `httpx` 用于请求 LibreHardwareMonitor 远程 Web 接口
 - `FastAPI` 用于快速暴露调试接口
 - `pydantic-settings` 用于读取运行配置
 
-## 6. DLL 放置建议
+## 6. 数据源配置建议
 
-当前约定把 `LibreHardwareMonitorLib.dll` 放在：
+当前约定通过下面几个配置访问 LibreHardwareMonitor 远程 Web 接口：
+
+- `LHM_BASE_URL`
+- `LHM_DATA_PATH`
+- `LHM_TIMEOUT_MS`
+
+默认访问地址为：
 
 ```txt
-data-collector/src/core/LibreHardwareMonitorLib.dll
+http://127.0.0.1:8085/data.json
 ```
-
-并在配置中提供路径字段：
-
-- `LHM_DLL_PATH`
-
-这样后续如果 DLL 位置变化，只需要改配置，不需要改采集代码。
 
 ## 7. 最小接口设计
 
@@ -127,24 +124,35 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 用途：
 
-- 返回当前一次采集得到的原始传感器数据
+- 返回当前一次采集得到的最小标准化指标和原始调试数据
 
-当前阶段建议直接返回原始传感器列表，不做复杂协议包装，便于先确认采集是否正常。
+当前阶段会返回：
+
+- `metrics`：稳定的最小指标字段
+- `sensors`：扁平化后的原始传感器列表
+- `payload`：原始 `data.json`，仅在开启调试时返回
 
 返回示例：
 
 ```json
 {
   "ok": true,
-  "sensors": [
-    {
-      "hardware": "Intel Core i7-13700K",
-      "hardware_type": "Cpu",
-      "sensor": "CPU Package",
-      "sensor_type": "Temperature",
-      "value": 62.0
+  "metrics_schema_version": "1.0.0",
+  "metrics": {
+    "cpu": {
+      "usage_pct": 18.2,
+      "temp_c": 62.0
+    },
+    "memory": {
+      "used_mb": 13234.56,
+      "total_mb": 32768.0,
+      "usage_pct": 40.39
+    },
+    "gpu": {
+      "usage_pct": 24.0,
+      "temp_c": 55.0
     }
-  ]
+  }
 }
 ```
 
@@ -154,23 +162,21 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 初始化时完成以下动作：
 
-1. 读取 `LHM_DLL_PATH`
-2. 调用 `clr.AddReference(...)`
-3. 导入 `LibreHardwareMonitor.Hardware.Computer`
-4. 启用需要的硬件类别
-5. 调用 `Open()`
+1. 读取 `LHM_BASE_URL`
+2. 拼接 `LHM_DATA_PATH`
+3. 校验访问地址是否合法
 
 ### 8.2 刷新步骤
 
 每次读取时执行：
 
-1. 遍历 `computer.Hardware`
-2. 对每个硬件调用 `Update()`
-3. 递归更新 `SubHardware`
-4. 遍历 `Sensors`
-5. 收集名称、类型和值
+1. 请求 `data.json`
+2. 递归遍历 `Children`
+3. 收集名称、类型、值、路径
+4. 匹配关键原始传感器
+5. 输出最小标准化字段
 
-### 8.3 当前阶段为什么先保留原始传感器
+### 8.3 当前阶段为什么仍然保留原始传感器
 
 因为不同机器上的传感器名称差异很大，当前最重要的是先观察真实输出，例如：
 
@@ -184,11 +190,11 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 ## 9. 建议的阶段拆分
 
-### 阶段 1：打通 DLL 与原始采集
+### 阶段 1：打通 HTTP 数据源与原始采集
 
 目标：
 
-- Python 能成功加载 `LibreHardwareMonitorLib.dll`
+- Python 能成功请求 `LibreHardwareMonitor` 的 `data.json`
 - 能返回原始传感器列表
 
 验收：
@@ -201,7 +207,7 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 - 从原始传感器中提炼几个最关键字段
 
-建议先只做：
+当前实现先只做：
 
 - `cpu.usage_pct`
 - `cpu.temp_c`
@@ -214,6 +220,7 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 验收：
 
 - 返回结构稳定的最小指标 JSON
+- 仍然可以结合原始传感器输出做调试
 
 ### 阶段 3：引入推送与设备侧联调
 
@@ -236,17 +243,17 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 建议本阶段重点观察：
 
-- 是否能成功加载 DLL
+- 是否能成功访问 `data.json`
 - 是否存在空值
 - 是否存在某些硬件类别读取不到
-- 是否需要递归更新 `SubHardware`
+- 是否需要补充更多名称匹配规则
 
 ## 11. 当前阶段的成功标准
 
 满足下面两个条件，就说明最小链路已经跑通：
 
 - 服务能稳定启动，并能访问 `GET /health`
-- `GET /api/metrics/latest` 能返回原始硬件传感器 JSON
+- `GET /api/metrics/latest` 能返回最小标准化指标 JSON
 
 达到这个标准后，下一步再做字段映射和协议稳定化，成本会低很多。
 
@@ -254,8 +261,8 @@ data-collector/src/core/LibreHardwareMonitorLib.dll
 
 最小链路打通后，优先继续做下面两件事：
 
-1. 新增 `sensor_mapper.py`，把原始传感器映射为稳定字段
-2. 为 `data-collector` 定义第一版 `metrics` JSON 协议
+1. 继续补充不同主机上的传感器名称匹配规则
+2. 为 `data-collector` 定义更完整的 `metrics` JSON 协议
 
 不建议在最小链路还未跑通前就提前接入：
 

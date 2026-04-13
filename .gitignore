@@ -1,0 +1,64 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging / build artifacts
+.Python
+build/
+dist/
+site/
+downloads/
+eggs/
+.eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+
+# Coverage and test outputs
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+pytestdebug.log
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Notebook and interactive Python
+.ipynb_checkpoints/
+
+# Local databases / runtime files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Python version managers
+.python-version
+
+# IDE / OS noise commonly generated during Python development
+.DS_Store
+Thumbs.db
