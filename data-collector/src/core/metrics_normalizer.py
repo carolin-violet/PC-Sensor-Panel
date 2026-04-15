@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import re
 from typing import Any
 
@@ -24,6 +25,43 @@ def parse_numeric_value(raw_value: Any) -> float | None:
         return float(match.group(0))
     except ValueError:
         return None
+
+
+class _MemoryStatusEx(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", ctypes.c_ulong),
+        ("dwMemoryLoad", ctypes.c_ulong),
+        ("ullTotalPhys", ctypes.c_ulonglong),
+        ("ullAvailPhys", ctypes.c_ulonglong),
+        ("ullTotalPageFile", ctypes.c_ulonglong),
+        ("ullAvailPageFile", ctypes.c_ulonglong),
+        ("ullTotalVirtual", ctypes.c_ulonglong),
+        ("ullAvailVirtual", ctypes.c_ulonglong),
+        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+    ]
+
+
+def read_windows_memory_status_mb() -> dict[str, float] | None:
+    if not hasattr(ctypes, "windll"):
+        return None
+
+    memory_status = _MemoryStatusEx()
+    memory_status.dwLength = ctypes.sizeof(_MemoryStatusEx)
+
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status)):
+        return None
+
+    total_mb = round(memory_status.ullTotalPhys / 1024 / 1024, 2)
+    available_mb = round(memory_status.ullAvailPhys / 1024 / 1024, 2)
+    used_mb = round(total_mb - available_mb, 2)
+    usage_pct = round(memory_status.dwMemoryLoad, 2)
+
+    return {
+        "used_mb": used_mb,
+        "available_mb": available_mb,
+        "total_mb": total_mb,
+        "usage_pct": usage_pct,
+    }
 
 
 class MetricsNormalizer:
@@ -152,12 +190,23 @@ class MetricsNormalizer:
         if memory_load_pct is None and used_mb is not None and total_mb not in (None, 0):
             memory_load_pct = round(used_mb / total_mb * 100, 2)
 
-        return {
+        metrics = {
             "used_mb": used_mb,
             "available_mb": available_mb,
             "total_mb": total_mb,
             "usage_pct": memory_load_pct,
         }
+
+        if metrics["used_mb"] is None or metrics["total_mb"] is None:
+            fallback_metrics = read_windows_memory_status_mb()
+            if fallback_metrics is not None:
+                metrics["used_mb"] = fallback_metrics["used_mb"]
+                metrics["available_mb"] = fallback_metrics["available_mb"]
+                metrics["total_mb"] = fallback_metrics["total_mb"]
+                if metrics["usage_pct"] is None:
+                    metrics["usage_pct"] = fallback_metrics["usage_pct"]
+
+        return metrics
 
     def _normalize_cpu_metrics(self, sensors: list[dict[str, Any]]) -> dict[str, float | None]:
         return {
@@ -221,13 +270,13 @@ class MetricsNormalizer:
                 sensors,
                 sensor_type="Throughput",
                 names=("download", "received"),
-                path_keywords=("network",),
+                path_keywords=("network", "wlan", "wi-fi", "wifi", "ethernet", "nic"),
             ),
             "upload_kBps": self._max_numeric(
                 sensors,
                 sensor_type="Throughput",
                 names=("upload", "sent"),
-                path_keywords=("network",),
+                path_keywords=("network", "wlan", "wi-fi", "wifi", "ethernet", "nic"),
             ),
         }
 

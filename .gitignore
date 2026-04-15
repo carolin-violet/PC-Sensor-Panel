@@ -1,5 +1,4 @@
 # Python bytecode and caches
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -62,3 +61,5 @@ pytestdebug.log
 # IDE / OS noise commonly generated during Python development
 .DS_Store
 Thumbs.db
+
+__pycache__/

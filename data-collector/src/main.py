@@ -68,9 +68,38 @@ async def latest_metrics() -> JSONResponse:
         )
 
     try:
-        return JSONResponse(status_code=200, content=reader.read())
+        return JSONResponse(status_code=200, content=reader.read_latest())
     except Exception as exc:  # pragma: no cover - depends on host hardware/runtime
-        logging.getLogger("src").exception("Failed to collect metrics.")
+        logging.getLogger("src").exception("Failed to collect latest metrics.")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "LHM_READ_FAILED",
+                "message": str(exc),
+            },
+        )
+
+
+@app.get("/api/metrics/raw")
+async def raw_metrics() -> JSONResponse:
+    reader = app.state.lhm_reader
+    init_error = app.state.lhm_init_error
+
+    if reader is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "LHM_READER_INIT_FAILED",
+                "message": init_error or "LibreHardwareMonitor reader is unavailable.",
+            },
+        )
+
+    try:
+        return JSONResponse(status_code=200, content=reader.read_raw())
+    except Exception as exc:  # pragma: no cover - depends on host hardware/runtime
+        logging.getLogger("src").exception("Failed to collect raw metrics.")
         return JSONResponse(
             status_code=500,
             content={

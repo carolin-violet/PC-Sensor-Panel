@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     COLLECT_INTERVAL_MS: int = 500
     PUSH_INTERVAL_MS: int = 1000
-    ENABLE_RAW_METRICS: bool = True
 
     LHM_BASE_URL: str = "http://127.0.0.1:8085"
     LHM_DATA_PATH: str = "/data.json"

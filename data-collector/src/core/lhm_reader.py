@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
 from src.core.metrics_normalizer import MetricsNormalizer, parse_numeric_value
+from src.config import settings
 
 __all__ = ["LHMReader"]
 
@@ -105,6 +105,32 @@ class LHMReader:
     def _normalize_metrics(self, sensors: list[dict[str, Any]]) -> dict[str, Any]:
         return self._metrics_normalizer.normalize(sensors)
 
+    def _build_device_metrics(self, metrics: dict[str, Any]) -> dict[str, Any]:
+        cpu = metrics.get("cpu") or {}
+        memory = metrics.get("memory") or {}
+        gpu = metrics.get("gpu") or {}
+        network = metrics.get("network") or {}
+
+        return {
+            "cpu": {
+                "usage_pct": cpu.get("usage_pct"),
+                "temp_c": cpu.get("temp_c"),
+            },
+            "memory": {
+                "used_mb": memory.get("used_mb"),
+                "total_mb": memory.get("total_mb"),
+                "usage_pct": memory.get("usage_pct"),
+            },
+            "gpu": {
+                "usage_pct": gpu.get("usage_pct"),
+                "temp_c": gpu.get("temp_c"),
+            },
+            "network": {
+                "download_kBps": network.get("download_kBps"),
+                "upload_kBps": network.get("upload_kBps"),
+            },
+        }
+
     def _fetch_payload(self) -> Any:
         try:
             with httpx.Client(timeout=self._timeout_seconds) as client:
@@ -131,23 +157,34 @@ class LHMReader:
                 f"Endpoint: {self._data_url}"
             ) from exc
 
-    def read(self) -> dict[str, Any]:
-        payload = self._fetch_payload()
-        sensors = self._flatten_sensors(payload)
-        metrics = self._normalize_metrics(sensors)
-
-        response: dict[str, Any] = {
+    def _build_common_metadata(self) -> dict[str, Any]:
+        return {
             "ok": True,
             "source": "lhm_http",
             "data_url": self.data_url,
             "collected_at": datetime.now().astimezone().isoformat(),
             "metrics_schema_version": "1.0.0",
+        }
+
+    def read_latest(self) -> dict[str, Any]:
+        payload = self._fetch_payload()
+        sensors = self._flatten_sensors(payload)
+        metrics = self._normalize_metrics(sensors)
+
+        return {
+            **self._build_common_metadata(),
+            "metrics": self._build_device_metrics(metrics),
+        }
+
+    def read_raw(self) -> dict[str, Any]:
+        payload = self._fetch_payload()
+        sensors = self._flatten_sensors(payload)
+        metrics = self._normalize_metrics(sensors)
+
+        return {
+            **self._build_common_metadata(),
             "metrics": metrics,
             "sensor_count": len(sensors),
             "sensors": sensors,
+            "payload": payload,
         }
-
-        if settings.ENABLE_RAW_METRICS:
-            response["payload"] = payload
-
-        return response
