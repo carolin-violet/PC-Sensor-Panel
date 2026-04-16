@@ -21,8 +21,8 @@ namespace {
 
 constexpr spi_host_device_t kSpiHost = SPI2_HOST;
 
-constexpr int kPanelWidth = 240;
-constexpr int kPanelHeight = 320;
+constexpr int kPanelWidth = 320;
+constexpr int kPanelHeight = 240;
 constexpr uint32_t kPixelClockHz = 20 * 1000 * 1000;
 
 constexpr int kPinMosi = 4;
@@ -132,8 +132,8 @@ esp_lcd_panel_handle_t init_panel(esp_lcd_panel_io_handle_t* out_io_handle) {
   ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
   ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, false));
   ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel_handle, 0, 0));
-  ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_handle, false, false));
-  ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(panel_handle, false));
+  ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_handle, true, false));
+  ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(panel_handle, true));
   ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
   *out_io_handle = io_handle;
